@@ -1,4 +1,4 @@
-# herdr-layouts
+# herdr-layout
 
 Lua-config based workspace layouts for [herdr](https://herdr.dev).
 
@@ -10,7 +10,7 @@ it if already running.
 entire tool is a few hundred lines of Lua that shell out to the herdr CLI.
 If you have `lua` on your PATH, you have everything.
 
-Built so I can jump between work contexts quickly.
+Built initially to help me jump quickly between projects and contexts.
 
 ## Install
 
@@ -90,9 +90,9 @@ Keep layouts you use often in `~/.config/herdr/layouts/`:
 
 ```sh
 mkdir -p ~/.config/herdr/layouts
-cp examples/dev.lua ~/.config/herdr/layouts/causalix.lua
+cp examples/dev.lua ~/.config/herdr/layouts/<my-layout>.lua
 
-herdr-layout causalix      # from anywhere
+herdr-layout <my-layout>      # from anywhere
 herdr-layout --list        # see what's available
 ```
 
