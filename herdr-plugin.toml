@@ -1,0 +1,12 @@
+id = "herdr-layouts"
+name = "Layouts"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+description = "Define and load workspace layouts from Lua config files"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "apply"
+title = "Apply layout"
+contexts = ["workspace"]
+command = ["lua", "bin/herdr-layout"]

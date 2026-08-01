@@ -1,0 +1,109 @@
+#!/usr/bin/env lua
+-- herdr-layout [config.lua | name] [--name LABEL] [--force] [--list]
+-- With no argument, looks for .herdr-layout.lua in the invocation
+-- directory (workspace cwd when run as a herdr plugin action).
+-- A bare name resolves to ~/.config/herdr/layouts/<name>.lua.
+
+local script = arg[0]
+local root = script:match("(.*)[/\\]bin[/\\][^/\\]+$") or "."
+package.path = root .. "/lua/?.lua;" .. root .. "/lua/?/init.lua;" .. package.path
+
+local layouts = require("layouts")
+
+local LAYOUTS_DIR = (os.getenv("HOME") or "~") .. "/.config/herdr/layouts"
+
+local function die(msg)
+  io.stderr:write("herdr-layout: ", msg, "\n")
+  os.exit(1)
+end
+
+local function exists(path)
+  local f = io.open(path, "r")
+  if f then f:close() end
+  return f ~= nil
+end
+
+local function layout_names()
+  local names = {}
+  local f = io.popen("ls -1 '" .. LAYOUTS_DIR .. "' 2>/dev/null")
+  if f then
+    for line in f:lines() do
+      local name = line:match("^(.+)%.lua$")
+      if name then names[#names + 1] = name end
+    end
+    f:close()
+  end
+  return names
+end
+
+local USAGE = [[usage: herdr-layout [config.lua | name] [--name LABEL] [--force] [--list]
+
+  config.lua | name  path to a layout config, or the name of one in
+                     ]] .. LAYOUTS_DIR .. [[
+
+                     (no argument: .herdr-layout.lua in current directory)
+  --name LABEL       open another instance under a different workspace label
+  --force            close the existing workspace with this label and rebuild
+  --list             list named layouts and exit]]
+
+local config_path, opts = nil, {}
+local i = 1
+while i <= #arg do
+  local a = arg[i]
+  if a == "--name" then
+    i = i + 1
+    opts.name = arg[i] or die("--name requires a value")
+  elseif a == "--force" then
+    opts.force = true
+  elseif a == "--list" then
+    for _, name in ipairs(layout_names()) do print(name) end
+    os.exit(0)
+  elseif a == "--help" or a == "-h" then
+    print(USAGE)
+    os.exit(0)
+  elseif a:sub(1, 1) == "-" then
+    die("unknown flag: " .. a)
+  elseif config_path then
+    die("unexpected argument: " .. a)
+  else
+    config_path = a
+  end
+  i = i + 1
+end
+
+if config_path and not exists(config_path) then
+  if config_path:match("^[%w_%-]+$") then
+    local named = LAYOUTS_DIR .. "/" .. config_path .. ".lua"
+    if exists(named) then
+      config_path = named
+    else
+      local names = layout_names()
+      local available = #names > 0 and table.concat(names, ", ") or "(none)"
+      die(("no layout '%s' in %s; available: %s")
+        :format(config_path, LAYOUTS_DIR, available))
+    end
+  else
+    die("no such file: " .. config_path)
+  end
+end
+
+if not config_path then
+  -- Plugin actions run with cwd = plugin dir; recover the workspace cwd
+  -- from the context herdr injects.
+  local dir
+  local ctx = os.getenv("HERDR_PLUGIN_CONTEXT_JSON")
+  if ctx then
+    dir = ctx:match('"focused_pane_cwd"%s*:%s*"([^"]*)"')
+      or ctx:match('"workspace_cwd"%s*:%s*"([^"]*)"')
+  end
+  dir = dir or os.getenv("PWD") or "."
+  config_path = dir .. "/.herdr-layout.lua"
+  if not exists(config_path) then
+    die("no config given and no .herdr-layout.lua in " .. dir)
+  end
+end
+
+local ok, err = pcall(layouts.apply, config_path, opts)
+if not ok then
+  die(tostring(err))
+end
