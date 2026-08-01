@@ -85,6 +85,9 @@ local function build_tab(cfg, tab, ti, workspace_id, first_pane_id)
       pane_ids[pi] = cli.json_field(out, "pane", "pane_id")
       log("  pane %d:%d created (%s)", ti, pi, pane_ids[pi])
     end
+    if pane.label then
+      cli.capture({ "pane", "rename", pane_ids[pi], pane.label })
+    end
     if pane.wait_for then
       wait_for(pane.wait_for, pane_ids, ti)
     end

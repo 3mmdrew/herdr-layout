@@ -4,7 +4,7 @@ local M = {}
 
 local TOP_KEYS = { name = true, root = true, tabs = true }
 local TAB_KEYS = { label = true, cwd = true, panes = true }
-local PANE_KEYS = { cmd = true, split = true, ratio = true, cwd = true, wait_for = true }
+local PANE_KEYS = { cmd = true, split = true, ratio = true, cwd = true, label = true, wait_for = true }
 local WAIT_KEYS = { pane = true, match = true, timeout = true }
 
 local function fail(msg, ...)

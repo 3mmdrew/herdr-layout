@@ -1,6 +1,6 @@
 <div align="center">
 
-```
+<pre>
 ┌───┬───────────┬───────┐
 │   │           │       │
 │   │           │ agent │
@@ -8,9 +8,12 @@
 │   │           ├───────┤
 │   │           │ shell │
 └───┴───────────┴───────┘
-```
+</pre>
 
 # herdr-layout
+
+Lua-config based workspace layouts for [herdr](https://herdr.dev).
+
 
 [![Lua](https://img.shields.io/badge/lua-5.4-blue?logo=lua)](https://www.lua.org/)
 [![herdr plugin](https://img.shields.io/badge/herdr-plugin-8A2BE2)](https://herdr.dev)
@@ -19,8 +22,6 @@
 [![dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#)
 
 </div>
-
-Lua-config based workspace layouts for [herdr](https://herdr.dev).
 
 Describe your project's tabs, panes, and startup commands once, in a small
 Lua file. Then bring the whole workspace up with one command — or attach to
@@ -140,7 +141,7 @@ A layout config is a Lua file that returns one table:
 |-----|-------|---------|
 | `name` | top | workspace label, required |
 | `root` | top | default working directory for everything |
-| `label` | tab | tab title |
+| `label` | tab, pane | tab title / pane title |
 | `cwd` | tab, pane | working directory override |
 | `cmd` | pane | command to run in the pane |
 | `split` | pane 2+ | `"right"` or `"down"`, splits the previous pane |
