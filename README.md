@@ -1,4 +1,24 @@
+<div align="center">
+
+```
+┌───┬───────────┬───────┐
+│   │           │       │
+│   │           │ agent │
+├───│   nvim    │       │
+│   │           ├───────┤
+│   │           │ shell │
+└───┴───────────┴───────┘
+```
+
 # herdr-layout
+
+[![Lua](https://img.shields.io/badge/lua-5.4-blue?logo=lua)](https://www.lua.org/)
+[![herdr plugin](https://img.shields.io/badge/herdr-plugin-8A2BE2)](https://herdr.dev)
+[![version](https://img.shields.io/badge/version-0.1.0-green)](herdr-plugin.toml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
+[![dependencies](https://img.shields.io/badge/dependencies-none-lightgrey)](#)
+
+</div>
 
 Lua-config based workspace layouts for [herdr](https://herdr.dev).
 
