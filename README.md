@@ -15,10 +15,10 @@ Built initially to help me jump quickly between projects and contexts.
 ## Install
 
 ```sh
-herdr plugin install 3mmdrew/herdr-layouts
+herdr plugin install 3mmdrew/herdr-layout
 
 # or from a local checkout
-herdr plugin link /path/to/herdr-layouts
+herdr plugin link /path/to/herdr-layout
 ```
 
 The plugin system is optional — the script also runs standalone:
@@ -52,7 +52,7 @@ return {
 Then, from that directory:
 
 ```sh
-herdr plugin action invoke herdr-layouts.apply
+herdr plugin action invoke herdr-layout.apply
 ```
 
 herdr opens a workspace named `myproject` with both tabs, splits the server
@@ -65,7 +65,7 @@ Optional keybinding in `~/.config/herdr/config.toml`:
 [[keys.command]]
 key = "prefix+l"
 type = "plugin_action"
-command = "herdr-layouts.apply"
+command = "herdr-layout.apply"
 description = "apply layout"
 ```
 
@@ -92,7 +92,7 @@ Keep layouts you use often in `~/.config/herdr/layouts/`:
 mkdir -p ~/.config/herdr/layouts
 cp examples/dev.lua ~/.config/herdr/layouts/<my-layout>.lua
 
-herdr-layout <my-layout>      # from anywhere
+herdr-layout <my-layout>   # from anywhere
 herdr-layout --list        # see what's available
 ```
 
