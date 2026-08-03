@@ -113,15 +113,8 @@ Keep layouts you use often in `~/.config/herdr/layouts/`:
 mkdir -p ~/.config/herdr/layouts
 cp examples/dev.lua ~/.config/herdr/layouts/<my-layout>.lua
 
-herdr-layout <my-layout>   # from anywhere
-herdr-layout --list        # see what's available
-```
-
-Tip: symlink `bin/herdr-layout` somewhere on your PATH to invoke named
-layouts from any directory:
-
-```sh
-ln -s "$(pwd)/bin/herdr-layout" ~/bin/herdr-layout
+bin/herdr-layout <my-layout>   # apply a named layout
+bin/herdr-layout --list        # see what's available
 ```
 
 Behavior you can rely on:
