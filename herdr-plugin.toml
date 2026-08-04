@@ -10,3 +10,17 @@ id = "apply"
 title = "Apply layout"
 contexts = ["workspace"]
 command = ["lua", "bin/herdr-layout"]
+
+[[actions]]
+id = "pick"
+title = "Pick and apply a layout"
+contexts = ["workspace"]
+command = ["lua", "bin/herdr-layout-pick"]
+
+[[panes]]
+id = "picker"
+title = "Pick layout"
+placement = "popup"
+width = "60%"
+height = 20
+command = ["lua", "bin/herdr-layout-picker"]

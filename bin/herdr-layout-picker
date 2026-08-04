@@ -1,0 +1,94 @@
+#!/usr/bin/env lua
+-- Runs inside the picker popup, which is a real terminal. Lists the
+-- project-local layout (when the origin workspace has one) plus every
+-- named layout, lets the user choose — fzf when available, a numbered
+-- menu otherwise — then applies the choice in-process.
+
+local root = os.getenv("HERDR_PLUGIN_ROOT")
+if not root then
+  root = arg[0]:match("(.*)[/\\]bin[/\\][^/\\]+$") or "."
+end
+package.path = root .. "/lua/?.lua;" .. root .. "/lua/?/init.lua;" .. package.path
+
+local layouts = require("layouts")
+local named = require("layouts.named")
+
+local function quote(s)
+  return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
+end
+
+local function exists(path)
+  local f = io.open(path, "r")
+  if f then f:close() end
+  return f ~= nil
+end
+
+local function pause(msg)
+  io.write(msg, " — press enter to close ")
+  io.read()
+end
+
+-- Entries: label shown to the user, path handed to layouts.apply.
+local entries = {}
+local origin = os.getenv("HERDR_LAYOUT_ORIGIN_CWD")
+if origin and exists(origin .. "/.herdr-layout.lua") then
+  entries[#entries + 1] = {
+    label = ". (this project: " .. origin .. ")",
+    path = origin .. "/.herdr-layout.lua",
+  }
+end
+for _, name in ipairs(named.names()) do
+  entries[#entries + 1] = { label = name, path = named.path(name) }
+end
+
+if #entries == 0 then
+  print("no layouts found.")
+  print("")
+  print("add named layouts under " .. named.dir)
+  print("or drop a .herdr-layout.lua in a project directory.")
+  pause("")
+  os.exit(0)
+end
+
+local function have_fzf()
+  -- os.execute returns a boolean on Lua 5.2+ and a number on 5.1.
+  local ok = os.execute("command -v fzf >/dev/null 2>&1")
+  return ok == true or ok == 0
+end
+
+local function pick_fzf()
+  local labels = {}
+  for _, e in ipairs(entries) do labels[#labels + 1] = quote(e.label) end
+  local cmd = "printf '%s\\n' " .. table.concat(labels, " ")
+    .. " | fzf --prompt='layout> ' --reverse --height=100%"
+  local f = io.popen(cmd)
+  local line = f:read("*l")
+  f:close()
+  if not line or line == "" then return nil end
+  for _, e in ipairs(entries) do
+    if e.label == line then return e end
+  end
+  return nil
+end
+
+local function pick_menu()
+  print("layouts:")
+  for i, e in ipairs(entries) do
+    print(("  %2d. %s"):format(i, e.label))
+  end
+  io.write(("apply which? (1-%d, enter to cancel) "):format(#entries))
+  local n = tonumber(io.read() or "")
+  return n and entries[n] or nil
+end
+
+local choice = have_fzf() and pick_fzf() or pick_menu()
+if not choice then
+  os.exit(0)
+end
+
+local ok, err = pcall(layouts.apply, choice.path, {})
+if not ok then
+  io.stderr:write("herdr-layout: ", tostring(err), "\n")
+  pause("apply failed")
+  os.exit(1)
+end

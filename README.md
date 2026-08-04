@@ -80,15 +80,38 @@ herdr opens a workspace named `myproject` with both tabs, splits the server
 tab, waits until the dev server prints "Listening", then starts the worker.
 Run it again and it simply focuses the existing workspace.
 
-Optional keybinding in `~/.config/herdr/config.toml`:
+## Layout picker
+
+Instead of remembering action ids or layout names, open an interactive
+picker from anywhere inside herdr:
+
+```sh
+herdr plugin action invoke herdr-layout.pick
+```
+
+A popup lists the current project's `.herdr-layout.lua` (if any) plus every
+named layout; pick one and it applies. The picker uses
+[fzf](https://github.com/junegunn/fzf) for fuzzy search when installed and
+falls back to a plain numbered menu otherwise — the zero-dependency promise
+holds either way.
+
+Bind it once in `~/.config/herdr/config.toml` and layouts become a single
+keystroke from any workspace:
 
 ```toml
 [[keys.command]]
 key = "prefix+l"
 type = "plugin_action"
-command = "herdr-layout.apply"
-description = "apply layout"
+command = "herdr-layout.pick"
+description = "pick layout"
 ```
+
+(Plugin actions run on the herdr server without a TTY, so the `pick` action
+itself can't be interactive — it opens a popup plugin pane, which does get
+a TTY, and the picker runs there.)
+
+You can still bind the non-interactive `herdr-layout.apply` action the same
+way if you want a key that applies the current project's layout directly.
 
 ## Usage
 

@@ -1,0 +1,36 @@
+#!/usr/bin/env lua
+-- Backs the `herdr-layout.pick` plugin action. Actions run on the herdr
+-- server without a TTY, so this script cannot be interactive itself: it
+-- opens the picker popup pane (which does get a TTY) and forwards the
+-- invoking workspace's cwd so the picker can offer the project-local
+-- .herdr-layout.lua too.
+
+local script = arg[0]
+local root = script:match("(.*)[/\\]bin[/\\][^/\\]+$") or "."
+package.path = root .. "/lua/?.lua;" .. root .. "/lua/?/init.lua;" .. package.path
+
+local cli = require("layouts.cli")
+
+local dir
+local ctx = os.getenv("HERDR_PLUGIN_CONTEXT_JSON")
+if ctx then
+  dir = ctx:match('"focused_pane_cwd"%s*:%s*"([^"]*)"')
+    or ctx:match('"workspace_cwd"%s*:%s*"([^"]*)"')
+end
+dir = dir or os.getenv("PWD")
+
+local args = { "plugin", "pane", "open",
+  "--plugin", os.getenv("HERDR_PLUGIN_ID") or "herdr-layout",
+  "--entrypoint", "picker" }
+if dir then
+  -- Env rather than --cwd: the pane command's relative path must keep
+  -- resolving against the plugin root.
+  args[#args + 1] = "--env"
+  args[#args + 1] = "HERDR_LAYOUT_ORIGIN_CWD=" .. dir
+end
+
+local ok, err = pcall(cli.capture, args)
+if not ok then
+  io.stderr:write("herdr-layout: ", tostring(err), "\n")
+  os.exit(1)
+end

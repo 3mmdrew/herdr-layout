@@ -9,8 +9,7 @@ local root = script:match("(.*)[/\\]bin[/\\][^/\\]+$") or "."
 package.path = root .. "/lua/?.lua;" .. root .. "/lua/?/init.lua;" .. package.path
 
 local layouts = require("layouts")
-
-local LAYOUTS_DIR = (os.getenv("HOME") or "~") .. "/.config/herdr/layouts"
+local named = require("layouts.named")
 
 local function die(msg)
   io.stderr:write("herdr-layout: ", msg, "\n")
@@ -23,23 +22,10 @@ local function exists(path)
   return f ~= nil
 end
 
-local function layout_names()
-  local names = {}
-  local f = io.popen("ls -1 '" .. LAYOUTS_DIR .. "' 2>/dev/null")
-  if f then
-    for line in f:lines() do
-      local name = line:match("^(.+)%.lua$")
-      if name then names[#names + 1] = name end
-    end
-    f:close()
-  end
-  return names
-end
-
 local USAGE = [[usage: herdr-layout [config.lua | name] [--name LABEL] [--force] [--list]
 
   config.lua | name  path to a layout config, or the name of one in
-                     ]] .. LAYOUTS_DIR .. [[
+                     ]] .. named.dir .. [[
 
                      (no argument: .herdr-layout.lua in current directory)
   --name LABEL       open another instance under a different workspace label
@@ -56,7 +42,7 @@ while i <= #arg do
   elseif a == "--force" then
     opts.force = true
   elseif a == "--list" then
-    for _, name in ipairs(layout_names()) do print(name) end
+    for _, name in ipairs(named.names()) do print(name) end
     os.exit(0)
   elseif a == "--help" or a == "-h" then
     print(USAGE)
@@ -73,14 +59,14 @@ end
 
 if config_path and not exists(config_path) then
   if config_path:match("^[%w_%-]+$") then
-    local named = LAYOUTS_DIR .. "/" .. config_path .. ".lua"
-    if exists(named) then
-      config_path = named
+    local named_path = named.path(config_path)
+    if exists(named_path) then
+      config_path = named_path
     else
-      local names = layout_names()
+      local names = named.names()
       local available = #names > 0 and table.concat(names, ", ") or "(none)"
       die(("no layout '%s' in %s; available: %s")
-        :format(config_path, LAYOUTS_DIR, available))
+        :format(config_path, named.dir, available))
     end
   else
     die("no such file: " .. config_path)
