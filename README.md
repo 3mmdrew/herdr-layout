@@ -89,22 +89,36 @@ picker from anywhere inside herdr:
 herdr plugin action invoke herdr-layout.pick
 ```
 
-A popup lists the current project's `.herdr-layout.lua` (if any) plus every
-named layout; pick one and it applies. The picker uses
-[fzf](https://github.com/junegunn/fzf) for fuzzy search when installed and
-falls back to a plain numbered menu otherwise — the zero-dependency promise
-holds either way.
+A popup lists the current project's `.herdr-layout.lua` (if any, marked
+with `◆`) plus every named layout; pick one and it applies. With
+[fzf](https://github.com/junegunn/fzf) installed you get fuzzy search;
+without it the picker falls back to a built-in interactive menu — the
+zero-dependency promise holds either way. Both are styled after herdr's
+own navigator and use the same keys:
+
+| Key | Action |
+|-----|--------|
+| type | fuzzy-search (fzf only) |
+| `j` / `k` / `↑` / `↓` | move selection |
+| `enter` | apply the selected layout |
+| `esc` / `q` | close without applying |
 
 Bind it once in `~/.config/herdr/config.toml` and layouts become a single
 keystroke from any workspace:
 
 ```toml
 [[keys.command]]
-key = "prefix+l"
+key = "prefix+a"
 type = "plugin_action"
 command = "herdr-layout.pick"
 description = "pick layout"
 ```
+
+Any free key works, but note that the obvious mnemonic `prefix+l` is
+already taken: herdr binds it to `keys.focus_pane_right` by default, as
+part of the vim-style `h/j/k/l` pane navigation. `prefix+a` ("apply") has
+no default binding. Reload your config (or restart the client) after
+adding it.
 
 (Plugin actions run on the herdr server without a TTY, so the `pick` action
 itself can't be interactive — it opens a popup plugin pane, which does get

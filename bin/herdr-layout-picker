@@ -1,8 +1,12 @@
 #!/usr/bin/env lua
--- Runs inside the picker popup, which is a real terminal. Lists the
--- project-local layout (when the origin workspace has one) plus every
--- named layout, lets the user choose — fzf when available, a numbered
--- menu otherwise — then applies the choice in-process.
+-- Runs inside the picker popup, which is a real terminal — herdr draws the
+-- accent border and "Pick layout" title around it, so this script only
+-- renders the inner content. Lists the project-local layout (when the
+-- origin workspace has one) plus every named layout and lets the user
+-- choose. Uses fzf when available; otherwise a pure-Lua interactive menu
+-- styled after herdr's native navigator: j/k/arrows move, enter applies,
+-- esc closes, the selection is a full-width highlight bar, and the current
+-- project is marked with the same ◆ gutter glyph.
 
 local root = os.getenv("HERDR_PLUGIN_ROOT")
 if not root then
@@ -12,6 +16,9 @@ package.path = root .. "/lua/?.lua;" .. root .. "/lua/?/init.lua;" .. package.pa
 
 local layouts = require("layouts")
 local named = require("layouts.named")
+
+local HOME = os.getenv("HOME")
+local BOLD, DIM, REV, RESET = "\27[1m", "\27[2m", "\27[7m", "\27[0m"
 
 local function quote(s)
   return "'" .. tostring(s):gsub("'", "'\\''") .. "'"
@@ -23,22 +30,47 @@ local function exists(path)
   return f ~= nil
 end
 
+local function tilde(path)
+  if HOME and path:sub(1, #HOME) == HOME then
+    return "~" .. path:sub(#HOME + 1)
+  end
+  return path
+end
+
+local function shell_line(cmd)
+  local f = io.popen(cmd)
+  local out = f and f:read("*l")
+  if f then f:close() end
+  return out
+end
+
+local function shell_ok(cmd)
+  -- os.execute returns a boolean on Lua 5.2+ and a number on 5.1.
+  local ok = os.execute(cmd)
+  return ok == true or ok == 0
+end
+
 local function pause(msg)
   io.write(msg, " — press enter to close ")
   io.read()
 end
 
--- Entries: label shown to the user, path handed to layouts.apply.
+-- Entries: label shown to the user, path handed to layouts.apply,
+-- detail for the navigator-style bottom line, current for the ◆ gutter.
 local entries = {}
 local origin = os.getenv("HERDR_LAYOUT_ORIGIN_CWD")
 if origin and exists(origin .. "/.herdr-layout.lua") then
   entries[#entries + 1] = {
-    label = ". (this project: " .. origin .. ")",
+    label = (origin:match("([^/\\]+)[/\\]?$") or origin) .. " (this project)",
     path = origin .. "/.herdr-layout.lua",
+    current = true,
   }
 end
 for _, name in ipairs(named.names()) do
   entries[#entries + 1] = { label = name, path = named.path(name) }
+end
+for _, e in ipairs(entries) do
+  e.detail = tilde(e.path)
 end
 
 if #entries == 0 then
@@ -50,28 +82,144 @@ if #entries == 0 then
   os.exit(0)
 end
 
-local function have_fzf()
-  -- os.execute returns a boolean on Lua 5.2+ and a number on 5.1.
-  local ok = os.execute("command -v fzf >/dev/null 2>&1")
-  return ok == true or ok == 0
+-- fzf picker ---------------------------------------------------------------
+
+-- Returns major * 1000 + minor (e.g. 0.53 -> 53), or nil without fzf.
+local function fzf_version()
+  local out = shell_line("fzf --version 2>/dev/null")
+  if not out then return nil end
+  local maj, min = out:match("(%d+)%.(%d+)")
+  if not maj then return nil end
+  return tonumber(maj) * 1000 + tonumber(min)
 end
 
-local function pick_fzf()
-  local labels = {}
-  for _, e in ipairs(entries) do labels[#labels + 1] = quote(e.label) end
-  local cmd = "printf '%s\\n' " .. table.concat(labels, " ")
-    .. " | fzf --prompt='layout> ' --reverse --height=100%"
+local function pick_fzf(version)
+  local lines = {}
+  for _, e in ipairs(entries) do
+    local gutter = e.current and "◆ " or "  "
+    lines[#lines + 1] = quote(gutter .. e.label .. "\t" .. e.detail)
+  end
+  -- Search on top, right-aligned match count, ─ separator, and a one-line
+  -- bottom "preview" as the detail row — the same shape as herdr's
+  -- navigator. --color=16 sticks to the base ANSI palette so the popup
+  -- inherits the user's terminal theme.
+  local opts = {
+    "--layout=reverse", "--height=100%", "--cycle", "--no-multi",
+    "--prompt=" .. quote(" / "),
+    "--separator=" .. quote("─"),
+    "--delimiter=" .. quote("\t"),
+    "--with-nth=1",
+    "--preview=" .. quote("echo {2}"),
+    "--preview-window=down,1",
+    "--color=16",
+  }
+  if version >= 53 then
+    -- Full-width selection bar like the navigator's highlighted row.
+    opts[#opts + 1] = "--highlight-line"
+    opts[#opts + 1] = "--pointer=" .. quote("")
+  end
+  opts[#opts + 1] = version >= 48 and "--info=inline-right" or "--info=inline"
+
+  local cmd = "printf '%s\\n' " .. table.concat(lines, " ")
+    .. " | fzf " .. table.concat(opts, " ")
   local f = io.popen(cmd)
   local line = f:read("*l")
   f:close()
   if not line or line == "" then return nil end
+  local label = (line:match("^(.-)\t") or line):gsub("^◆ ", ""):gsub("^  ", "")
   for _, e in ipairs(entries) do
-    if e.label == line then return e end
+    if e.label == label then return e end
   end
   return nil
 end
 
-local function pick_menu()
+-- Built-in interactive menu ------------------------------------------------
+
+local function term_size()
+  local out = shell_line("stty size 2>/dev/null") or ""
+  local r, c = out:match("^(%d+)%s+(%d+)")
+  r, c = tonumber(r), tonumber(c)
+  -- Some ptys report 0 0; fall back to sane defaults.
+  if not r or r < 4 then r = 20 end
+  if not c or c < 20 then c = 80 end
+  return r, c
+end
+
+-- Read n bytes from the tty. wait=false gives up after ~100ms so a bare
+-- Escape can be told apart from an arrow-key escape sequence. Each read
+-- spawns dd rather than using io.stdin, because C stdio latches its EOF
+-- flag after a zero-byte timeout read.
+local function read_bytes(n, wait)
+  os.execute(wait and "stty min 1 time 0 2>/dev/null"
+    or "stty min 0 time 1 2>/dev/null")
+  local f = io.popen("dd bs=1 count=" .. n .. " 2>/dev/null")
+  local out = f:read("*a") or ""
+  f:close()
+  return out
+end
+
+local function next_key()
+  local c = read_bytes(1, true)
+  if c == "\27" then
+    local seq = read_bytes(2, false)
+    if seq == "" then return "close" end
+    local final = seq:match("^%[(.)")
+    if final == "A" then return "up" end
+    if final == "B" then return "down" end
+    return nil
+  end
+  if c == "\r" or c == "\n" then return "enter" end
+  if c == "j" then return "down" end
+  if c == "k" then return "up" end
+  if c == "q" or c == "\3" or c == "" then return "close" end
+  return nil
+end
+
+local function clip(s, width)
+  local len = utf8.len(s)
+  if not len then
+    return #s > width and s:sub(1, width) or s
+  end
+  if len <= width then return s end
+  return s:sub(1, utf8.offset(s, width + 1) - 1)
+end
+
+local function pad(s, width)
+  return s .. string.rep(" ", math.max(0, width - (utf8.len(s) or #s)))
+end
+
+local function draw(sel, offset, rows, cols)
+  local body = math.max(1, rows - 3)
+  local out = { "\27[H" }
+  local function line(s)
+    out[#out + 1] = s .. "\27[K\r\n"
+  end
+  local last = math.min(#entries, offset + body)
+  for i = offset + 1, last do
+    local e = entries[i]
+    local gutter = e.current and " ◆ " or "   "
+    local text = pad(clip(gutter .. e.label, cols), cols)
+    if i == sel then
+      line(REV .. BOLD .. text .. RESET)
+    else
+      line(text)
+    end
+  end
+  for _ = last - offset + 1, body do
+    line("")
+  end
+  line(DIM .. string.rep("─", cols) .. RESET)
+  line(DIM .. " " .. clip(entries[sel].detail, cols - 1) .. RESET)
+  -- Footer without a trailing newline so the last row never scrolls.
+  out[#out + 1] = " " .. BOLD .. "enter" .. RESET .. DIM .. " apply  " .. RESET
+    .. BOLD .. "j/k/↑↓" .. RESET .. DIM .. " move  " .. RESET
+    .. BOLD .. "esc" .. RESET .. DIM .. " close" .. RESET .. "\27[K"
+  io.write(table.concat(out))
+  io.flush()
+end
+
+-- Plain numbered menu, for when stdin is not a tty (e.g. piped input).
+local function pick_plain()
   print("layouts:")
   for i, e in ipairs(entries) do
     print(("  %2d. %s"):format(i, e.label))
@@ -81,7 +229,51 @@ local function pick_menu()
   return n and entries[n] or nil
 end
 
-local choice = have_fzf() and pick_fzf() or pick_menu()
+local function pick_menu()
+  local saved = shell_line("stty -g 2>/dev/null")
+  if not saved or saved == "" or not shell_ok("stty raw -echo 2>/dev/null") then
+    return pick_plain()
+  end
+
+  io.write("\27[?25l\27[2J")
+  local rows, cols = term_size()
+  local body = math.max(1, rows - 3)
+  local sel, offset, choice = 1, 0, nil
+
+  local ok, err = pcall(function()
+    while true do
+      if sel <= offset then offset = sel - 1 end
+      if sel > offset + body then offset = sel - body end
+      draw(sel, offset, rows, cols)
+      local key = next_key()
+      if key == "down" then
+        sel = sel < #entries and sel + 1 or 1
+      elseif key == "up" then
+        sel = sel > 1 and sel - 1 or #entries
+      elseif key == "enter" then
+        choice = entries[sel]
+        return
+      elseif key == "close" then
+        return
+      end
+    end
+  end)
+
+  io.write("\27[?25h\27[2J\27[H")
+  os.execute("stty " .. saved .. " 2>/dev/null")
+  if not ok then error(err, 0) end
+  return choice
+end
+
+-- ---------------------------------------------------------------------------
+
+local version = fzf_version()
+local choice
+if version then
+  choice = pick_fzf(version)
+else
+  choice = pick_menu()
+end
 if not choice then
   os.exit(0)
 end
